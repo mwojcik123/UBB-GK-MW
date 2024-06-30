@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>rotating objects example</title>
+
+    <script src="glsim.js"></script>
+
+    <script>
+      let angleX = 15;
+      let angleY = -15;
+      let angleZ = 0;
+      let selectedObject = 1;
+
+      function randomColor() {
+        return Math.random();
+      }
+
+      function drawSpiral(numSegments) {
+        // zmiana koloru spirali na brązowy
+        glColor3f(139 / 255, 69 / 255, 19 / 255);
+        glBegin(GL_LINE_STRIP);
+        const spiralAngle = Math.PI / (numSegments * 0.5);
+        for (let i = 0; i < numSegments * numSegments; i++) {
+          const x = Math.cos(spiralAngle * i) * (0.03 * i);
+          const y = i / (2 * numSegments);
+          const z = Math.sin(spiralAngle * i) * (0.03 * i);
+          glVertex3d(x, y, z);
+        }
+        glEnd();
+      }
+
+      function drawPyramid(numSides) {
+        glBegin(GL_TRIANGLES);
+
+        for (let i = 0; i < numSides; ++i) {
+          const angle1 = (i * 2 * Math.PI) / numSides;
+          const angle2 = ((i + 1) * 2 * Math.PI) / numSides;
+
+          glColor3f(randomColor(), randomColor(), randomColor());
+          glVertex3f(0, 0, 1);
+          glVertex3f(Math.cos(angle1), Math.sin(angle1), 0);
+          glVertex3f(Math.cos(angle2), Math.sin(angle2), 0);
+        }
+
+        glColor3f(1, 0, 0);
+        for (let i = 0; i < numSides; ++i) {
+          glVertex3f(0, 0, 0);
+          glVertex3f(
+            Math.cos((i * 2 * Math.PI) / numSides),
+            Math.sin((i * 2 * Math.PI) / numSides),
+            0
+          );
+          glVertex3f(
+            Math.cos(((i + 1) * 2 * Math.PI) / numSides),
+            Math.sin(((i + 1) * 2 * Math.PI) / numSides),
+            0
+          );
+        }
+        glEnd();
+      }
+
+      function renderScene() {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glLoadIdentity();
+        glRotatef(angleZ, 0, 0, 1);
+        glRotatef(angleY, 0, 1, 0);
+        glRotatef(angleX, 1, 0, 0);
+
+        if (selectedObject === 1) {
+          drawSpiral(20);
+        } else {
+          drawPyramid(6);
+        }
+      }
+
+      function setupGL() {
+        glMatrixMode(GL_PROJECTION);
+        glOrtho(-1, 1, -1, 1, -1, 1);
+        glMatrixMode(GL_MODELVIEW);
+        glEnable(GL_DEPTH_TEST);
+        glClearColor(0, 0, 0, 1);
+      }
+
+      function handleKeyPress(event) {
+        const key = event.keyCode;
+        if (key == 37) {
+          angleY -= 15;
+        } else if (key == 39) {
+          angleY += 15;
+        } else if (key == 40) {
+          angleX += 15;
+        } else if (key == 38) {
+          angleX -= 15;
+        } else if (key == 33) {
+          angleZ += 15;
+        } else if (key == 34) {
+          angleZ -= 15;
+        } else if (key == 36) {
+          angleX = angleY = angleZ = 0;
+        } else if (key == 49) {
+          selectedObject = 1;
+        } else if (key == 50) {
+          selectedObject = 2;
+        }
+        if (key >= 34 && key <= 40) {
+          event.preventDefault();
+        }
+        renderScene();
+      }
+
+      function initialize() {
+        try {
+          glsimUse("glcanvas");
+        } catch (e) {
+          document.getElementById("canvas-holder").innerHTML =
+            "sorry, an error occurred:<br>" + e;
+          return;
+        }
+        document.onkeydown = handleKeyPress;
+        setupGL();
+        renderScene();
+      }
+    </script>
+  </head>
+
+  <body onload="initialize()">
+    <h3>rotating objects in opengl 1.1</h3>
+
+    <p>(rotate using arrow keys, page up, page down, and home keys.)</p>
+
+    <noscript>
+      <p><b>sorry, this page requires javascript!</b></p>
+    </noscript>
+
+    <div id="canvas-holder">
+      <canvas id="glcanvas" width="500" height="500"></canvas>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>rotating objects example</title>
+    <link rel="stylesheet" href="../demo.css" />
+    <script src="../script/demo-core.js"></script>
+    <script src="../script/glsim.js"></script>
+    <script>
+      let cam;
+      let animateCheckbox;
+      let baseCheckbox;
+      let ambientLightCheckbox;
+      let viewpointLightCheckbox;
+      let whiteLightCheckbox;
+      let isAnimating = false;
+      let frameCount = 0;
+
+      function sphere(radius, slices, stacks) {
+        for (let j = 0; j < stacks; j++) {
+          let lat1 = (Math.PI / stacks) * j - Math.PI / 2;
+          let lat2 = (Math.PI / stacks) * (j + 1) - Math.PI / 2;
+          let sinLat1 = Math.sin(lat1);
+          let cosLat1 = Math.cos(lat1);
+          let sinLat2 = Math.sin(lat2);
+          let cosLat2 = Math.cos(lat2);
+          glBegin(GL_TRIANGLE_STRIP);
+          for (let i = 0; i <= slices; i++) {
+            let lon = ((2 * Math.PI) / slices) * i;
+            let sinLon = Math.sin(lon);
+            let cosLon = Math.cos(lon);
+            let x1 = cosLon * cosLat1;
+            let y1 = sinLon * cosLat1;
+            let z1 = sinLat1;
+            let x2 = cosLon * cosLat2;
+            let y2 = sinLon * cosLat2;
+            let z2 = sinLat2;
+            glNormal3d(x2, y2, z2);
+            glVertex3d(radius * x2, radius * y2, radius * z2);
+            glNormal3d(x1, y1, z1);
+            glVertex3d(radius * x1, radius * y1, radius * z1);
+          }
+          glEnd();
+        }
+      }
+
+      function setLights() {
+        glColor3d(1, 1, 1);
+        let zero = [0, 0, 0, 1];
+        glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, zero);
+
+        if (viewpointLightCheckbox.checked) glEnable(GL_LIGHT0);
+        else glDisable(GL_LIGHT0);
+
+        if (whiteLightCheckbox.checked) {
+          glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [1, 1, 1, 1]);
+          glEnable(GL_LIGHT1);
+        } else {
+          glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, zero);
+          glDisable(GL_LIGHT1);
+        }
+        glPushMatrix();
+        glRotated(-frameCount, 0, 1, 0);
+        glTranslated(10, 7, 0);
+        glLightfv(GL_LIGHT1, GL_POSITION, zero);
+        sphere(0.5, 16, 8);
+        glPopMatrix();
+        glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, zero);
+      }
+
+      function cylinder() {
+        glBegin(GL_TRIANGLE_STRIP);
+        for (let i = 0; i <= 64; i++) {
+          let angle = ((2 * Math.PI) / 64) * i;
+          let x = Math.cos(angle);
+          let y = Math.sin(angle);
+          glNormal3d(x, y, 0);
+          glVertex3d(x, y, 1);
+          glVertex3d(x, y, -1);
+        }
+        glEnd();
+        glNormal3d(0, 0, 1);
+        glBegin(GL_TRIANGLE_FAN);
+        glColor3d(1, 1, 1);
+        glVertex3d(0, 0, 1);
+        for (let i = 0; i <= 64; i++) {
+          let angle = ((2 * Math.PI) / 64) * i;
+          let x = Math.cos(angle);
+          let y = Math.sin(angle);
+          glVertex3d(x, y, 1);
+        }
+        glEnd();
+        glNormal3f(0, 0, -1);
+        glBegin(GL_TRIANGLE_FAN);
+        glColor3d(1, 1, 1);
+        glVertex3d(0, 0, -1);
+        for (let i = 64; i >= 0; i--) {
+          let angle = ((2 * Math.PI) / 64) * i;
+          let x = Math.cos(angle);
+          let y = Math.sin(angle);
+          glVertex3d(x, y, -1);
+        }
+        glEnd();
+      }
+
+      function pyramid() {
+        let sides = 6;
+        let height = 1.5;
+        let materialProps = [
+          0.6,
+          0.0,
+          0.0,
+          1.0, // ambient
+          0.6,
+          0.0,
+          0.0,
+          1.0, // diffuse
+          1.0,
+          0.5,
+          0.5,
+          1.0, // specular
+          16, // shininess
+        ];
+
+        glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, materialProps.slice(0, 4));
+        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, materialProps.slice(4, 8));
+        glMaterialfv(
+          GL_FRONT_AND_BACK,
+          GL_SPECULAR,
+          materialProps.slice(8, 12)
+        );
+        glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, materialProps[12]);
+
+        glBegin(GL_POLYGON);
+        glNormal3d(0, 0, -1);
+        for (let i = 0; i < sides; i++) {
+          let angle = ((2 * Math.PI) / sides) * i;
+          let x = Math.cos(angle);
+          let y = Math.sin(angle);
+          glVertex3d(x, y, 0);
+        }
+        glEnd();
+
+        glBegin(GL_TRIANGLES);
+        for (let i = 0; i < sides; i++) {
+          let angle1 = ((2 * Math.PI) / sides) * i;
+          let angle2 = ((2 * Math.PI) / sides) * (i + 1);
+          let x1 = Math.cos(angle1);
+          let y1 = Math.sin(angle1);
+          let x2 = Math.cos(angle2);
+          let y2 = Math.sin(angle2);
+          let nx = (x1 + x2) / 2;
+          let ny = (y1 + y2) / 2;
+          glNormal3d(nx, ny, height / 2);
+          glVertex3d(0, 0, height);
+          glVertex3d(x1, y1, 0);
+          glVertex3d(x2, y2, 0);
+        }
+        glEnd();
+      }
+
+      function render() {
+        glClearColor(0, 0, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        cam.apply();
+
+        setLights();
+
+        if (ambientLightCheckbox.checked) {
+          glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.15, 0.15, 0.15, 1]);
+        } else {
+          glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0, 0, 0, 1]);
+        }
+
+        if (baseCheckbox.checked) {
+          glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0, 0, 0, 1]);
+
+          glPushMatrix();
+          glTranslated(0, -0.4, 0);
+          glRotated(-90, 1, 0, 0);
+          glScaled(10, 10, 0.5);
+          cylinder();
+          glPopMatrix();
+        }
+
+        glColor3d(0.7, 0.7, 0.7); // sets diffuse and ambient color for teapot
+
+        glPushMatrix();
+        glScalef(7, 7, 7);
+        glRotated(-90, 1, 0, 0);
+        pyramid();
+        glPopMatrix();
+      }
+
+      function initializeGL() {
+        glClearColor(0, 0, 0, 1);
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_LIGHTING);
+        glEnable(GL_LIGHT0);
+        glEnable(GL_NORMALIZE);
+        glEnable(GL_COLOR_MATERIAL);
+        glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
+        glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 32);
+
+        let dim = [0.5, 0.5, 0.5, 1];
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, dim);
+        glLightfv(GL_LIGHT0, GL_SPECULAR, dim);
+
+        let red = [1, 1, 1, 1];
+        let reda = [0.01, 0, 0, 1];
+        glLightfv(GL_LIGHT1, GL_AMBIENT, reda);
+        glLightfv(GL_LIGHT1, GL_DIFFUSE, red);
+        glLightfv(GL_LIGHT1, GL_SPECULAR, red);
+      }
+
+      function updateFrame() {
+        if (isAnimating) {
+          frameCount++;
+          render();
+          setTimeout(updateFrame, 30);
+        }
+      }
+
+      function initialize() {
+        try {
+          glsimUse("maincanvas");
+        } catch (e) {
+          document.getElementById("canvas-holder").innerHTML =
+            "<p><b>Sorry, an error occurred:<br>" + e + "</b></p>";
+          return;
+        }
+        animateCheckbox = document.getElementById("animate");
+        baseCheckbox = document.getElementById("drawBase");
+        ambientLightCheckbox = document.getElementById("ambientLight");
+        viewpointLightCheckbox = document.getElementById("viewpointLight");
+        whiteLightCheckbox = document.getElementById("whitelight");
+        animateCheckbox.checked = false;
+        baseCheckbox.checked = true;
+        ambientLightCheckbox.checked = true;
+        viewpointLightCheckbox.checked = false;
+        whiteLightCheckbox.checked = true;
+        baseCheckbox.onchange = render;
+        ambientLightCheckbox.onchange = render;
+        viewpointLightCheckbox.onchange = render;
+        whiteLightCheckbox.onchange = render;
+        animateCheckbox.onchange = function () {
+          if (animateCheckbox.checked) {
+            isAnimating = true;
+            updateFrame();
+          } else {
+            isAnimating = false;
+          }
+        };
+        initializeGL();
+        cam = new Camera();
+        cam.lookAt(5, 10, 30, 0, 0, 0, 0, 1, 0);
+        cam.setScale(15);
+        cam.installTrackball(render);
+        render();
+      }
+    </script>
+  </head>
+  <body onload="initialize()">
+    <div id="content">
+      <h3 id="headline">four lights demo</h3>
+
+      <div id="canvas-holder">
+        <canvas id="maincanvas" width="400" height="400"></canvas>
+      </div>
+
+      <div id="tools">
+        <p>
+          <label><input type="checkbox" id="animate" />animate</label
+          ><br /><br />
+          <label><input type="checkbox" id="drawBase" />draw base</label
+          ><br /><br />
+          <label
+            ><input type="checkbox" id="ambientLight" />global ambient</label
+          ><br /><br />
+          <label
+            ><input type="checkbox" id="viewpointLight" />viewpoint light</label
+          ><br />
+          <label><input type="checkbox" id="whitelight" />white light</label
+          ><br />
+        </p>
+      </div>
+    </div>
+
+    <div id="help-content" style="display: none">
+      <h3>about this demo...</h3>
+      <p>
+        The demo shows a scene that is illuminated by four light sources, as
+        well as by a dim global ambient light. There is a "viewpoint" light,
+        which is a white light shining into the scene from the direction of the
+        viewer. There are three colored positional lights, with a small sphere
+        at the position of each light. The checkboxes allow you to turn the
+        lights off and on. You can control whether the base is displayed. You
+        can turn on an animation that makes the colored lights fly in circles
+        around the teapot. And you can rotate the scene as a whole using your
+        mouse.
+      </p>
+      <p>
+        Some things to do: Turn off all of the lights except one, and note the
+        effect of that light on the teapot. (Maybe turn off the base so it
+        doesn't distract you.) For the colored lights, be sure to use animation
+        so that you can see how the colors on the teapot change. Try it with
+        only two colored lights turned on, and see how their colors combine.
+        Note that when one a colored light is turned on, it adds some of its
+        color to the ambient light; to see the effect look at the bottom of the
+        teapot, with just one light turned on (and display of the base turned
+        off).
+      </p>
+      <p>
+        Note that when the only light source is a single colored light, part of
+        the base is black; this is because, for example, a part of a surface
+        that contains no red will not reflect any red light.
+      </p>
+      <p>
+        You might also note that the teapot does not cast shadows on the base.
+        OpenGL does not support shadows, except with a lot of extra work.
+      </p>
+      <p>
+        The base has a material that changes colors around the edge of the
+        cylinder. This is meant as a demonstration of using different material
+        colors at different vertices of the same primitive. It also uses
+        <i>GL_COLOR_MATERIAL</i> so that the material colors can be set by
+        calling <i>glColor3fv</i> instead of <i>glMaterialfv</i>.
+      </p>
+    </div>
+
+    <div id="help-icon">
+      <img
+        src="../image/question32.png"
+        onclick="showDemoHelp()"
+        title="click here for information about this demo."
+        width="32"
+        height="32"
+      />
+    </div>
+    <div id="hide-help-icon">
+      <img
+        src="../image/close32.png"
+        onclick="showDemoHelp()"
+        title="click here to return to the demo."
+        width="65"
+        height="32"
+      />
+    </div>
+    <div id="helpBG" style="display: none"></div>
+  </body>
+</html>

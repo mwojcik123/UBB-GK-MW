@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rotating Shapes</title>
+    <style>
+      canvas {
+        border: 1px solid black;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvasElement" width="900" height="600"></canvas>
+    <script>
+      const canvasElement = document.getElementById("canvasElement");
+      const context = canvasElement.getContext("2d");
+
+      let rotationAngle = 0;
+
+      function renderPolygon(cx, cy, r, sides) {
+        context.beginPath();
+        context.moveTo(
+          cx + r * Math.cos(rotationAngle),
+          cy + r * Math.sin(rotationAngle)
+        );
+
+        for (let i = 1; i <= sides; i++) {
+          rotationAngle += (2 * Math.PI) / sides;
+          const x = cx + r * Math.cos(rotationAngle);
+          const y = cy + r * Math.sin(rotationAngle);
+          context.lineTo(x, y);
+          context.moveTo(cx, cy);
+          context.lineTo(x, y);
+        }
+
+        context.closePath();
+        context.strokeStyle = "#000";
+        context.stroke();
+      }
+
+      function renderRotatedRect(x, y, w, h, angle, color) {
+        context.save();
+        context.translate(x, y);
+        context.rotate((angle * Math.PI) / 180);
+        context.fillStyle = color;
+        context.fillRect(-w / 2, -h / 2, w, h);
+        context.restore();
+      }
+
+      function renderTriangle(cx, cy, size, color) {
+        const x1 = cx - size / 2;
+        const y1 = cy + size / Math.sqrt(3);
+        const x2 = cx + size / 2;
+        const y2 = cy + size / Math.sqrt(3);
+        const x3 = cx;
+        const y3 = cy - (2 * size) / Math.sqrt(3);
+
+        context.fillStyle = color;
+
+        context.beginPath();
+        context.moveTo(x1, y1);
+        context.lineTo(x2, y2);
+        context.lineTo(x3, y3);
+        context.closePath();
+        context.fill();
+      }
+
+      function startAnimation() {
+        context.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        rotationAngle += Math.PI / 180;
+        renderPolygon(60, 132, 40, 6);
+        renderPolygon(272, 190, 40, 6);
+        renderRotatedRect(167, 160, 230, 15, 15, "red");
+        renderTriangle(160, 235, 60, "purple");
+
+        renderPolygon(480, 112, 32, 6);
+        renderPolygon(652, 161, 32, 6);
+        renderRotatedRect(567, 136, 184, 15, 15, "red");
+        renderTriangle(560, 195, 48, "green");
+
+        renderPolygon(223, 402, 52, 6);
+        renderPolygon(510, 479, 52, 6);
+        renderRotatedRect(367, 440, 299, 15, 15, "red");
+        renderTriangle(360, 535, 78, "blue");
+
+        requestAnimationFrame(startAnimation);
+      }
+
+      startAnimation();
+    </script>
+  </body>
+</html>
