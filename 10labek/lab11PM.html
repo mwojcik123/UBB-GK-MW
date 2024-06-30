@@ -2,234 +2,320 @@
 <meta charset="UTF-8" />
 <html>
   <head>
-    <title>WebGL Introduction</title>
+    <title>WebGL Intro</title>
     <style>
       html,
       body {
-        margin: 0;
-        overflow: hidden;
+        margin: 0; /* Make sure that there is no margin around the canvas */
+        overflow: hidden; /* Make sure we don't get scroll bars. */
       }
 
       canvas {
-        display: block;
+        display: block; /* The default display, inline, would add a small margin below the canvas */
       }
     </style>
 
+    <!--
+        A 2D WebGL app in which "points" move around in the browser window, bouncing
+        off the edges.  The animation can be paused and restarted by pressing the
+        space key.
+            If the user clicks or clicks-and-drags with the mouse, all of the
+        points head towards the mouse position, except if the user shift-clicks, the
+        positions and velocities of the points are re-initialized.
+    -->
     <div style="text-align: center; color: white; background-color: black">
-      SPACE - start animation, w - change shape, e - change colors
+      Spacja - Run Animation, W - Change shape, E - change color
     </div>
-    <script type="x-shader/x-vertex" id="vertex-shader">
-      attribute vec2 vertexCoords;
-      uniform float canvasWidth;
-      uniform float canvasHeight;
+    <script type="x-shader/x-vertex" id="vertex-shader-source">
+      attribute vec2 a_position; // vertex position in standard canvas pixel coords
+      uniform float u_canvasWidth;   // width of canvas
+      uniform float u_canvasHeight;  // height of canvas
 
-      uniform float pointSize;
-      uniform int shapeType;
-      attribute vec3 vertexColor;
-      varying vec3 fragColor;
-      varying float fragShapeType;
+      uniform float u_pointSize; //+
+      uniform int u_shapeType;	//+
+      attribute vec3 a_color; //+
+      varying vec3 v_color; //+
+      varying float v_shapeType;//+
 
       void main() {
-        float x = vertexCoords.x / canvasWidth * 2.0 - 1.0;
-        float y = 1.0 - vertexCoords.y / canvasHeight * 2.0;
+      float x,y;  // vertex position in clip coordinates
 
-        gl_Position = vec4(x, y, 0.0, 1.0);
-        gl_PointSize = pointSize;
-        fragColor = vec3(vertexColor);
-        fragShapeType = float(shapeType);
+      x = a_position.x/u_canvasWidth * 2.0 - 1.0;  // convert pixel coords to clip coords
+      y = 1.0 - a_position.y/u_canvasHeight * 2.0;
+
+      gl_Position = vec4(x, y, 0.0, 1.0);
+      gl_PointSize = u_pointSize;
+      v_color = vec3(a_color); //+
+      v_shapeType = float(u_shapeType); //+
       }
     </script>
-    <script type="x-shader/x-fragment" id="fragment-shader">
-        #ifdef GL_FRAGMENT_PRECISION_HIGH
-           precision highp float;
-        #else
-           precision mediump float;
-        #endif
+    <script type="x-shader/x-fragment" id="fragment-shader-source">
+          #ifdef GL_FRAGMENT_PRECISION_HIGH
+             precision highp float;
+          #else
+             precision mediump float;
+          #endif
 
-      varying vec3 fragColor;
-      varying float fragShapeType;
+      		varying vec3 v_color;
+      		varying float v_shapeType;
 
-            const float pi=3.14;
+              const float pi=3.14;
+      		//rysowanie polygon
+              float polygon(float s, float apotheme, vec2 p)
+      		{
+              float ang=atan(p.x,p.y);
+              ang-=floor(ang/pi/2.*s)/s*pi*2.-pi/s;
+      		return cos(atan(p.x,p.y)-floor(atan(p.x,p.y)/pi/2.*s)/s*pi*2.-pi/s)*length(p)<apotheme?1.:0.;
+      		}
 
-      float polygon(float sides, float apotheme, vec2 point) {
-            float angle = atan(point.x, point.y);
-            angle -= floor(angle / pi / 2.0 * sides) / sides * pi * 2.0 - pi / sides;
-        return cos(angle) * length(point) < apotheme ? 1.0 : 0.0;
-      }
-
-            void main() {
-            float distance = distance(vec2(0.5), gl_PointCoord);
-            gl_FragColor = vec4(fragColor, 1.0);
-            if (fragShapeType > 4.0) {
-                if (distance > polygon(fragShapeType, 0.4, vec2(gl_PointCoord.x - 0.5, gl_PointCoord.y - 0.5))) {
-                    discard;
-                }
-             }
-            }
+              void main()
+      		{
+              float dist=distance( vec2(0.5), gl_PointCoord );
+              gl_FragColor=vec4(v_color, 1.0);//RGBA
+              if ( v_shapeType> 4.0 )
+      		 {
+                  if ( dist > polygon( v_shapeType , 0.4, vec2(gl_PointCoord.x - 0.5, gl_PointCoord.y- 0.5)))
+      			{
+                  discard;
+                  }
+               }
+              }
+      //_____________________________________________________________________________________________________
     </script>
 
     <script>
       "use strict";
 
-      var canvas;
-      var gl;
+      var canvas; // The canvas that is used for WebGL drawing; occupies the entire window.
+      var gl; // The webgl context.
 
-      var canvasWidthLoc;
-      var canvasHeightLoc;
-      var pointSizeLoc;
-      var vertexCoordsLoc;
-      var vertexColorLoc;
-      var vertexCoordsBuffer;
-      var vertexColorBuffer;
-      var shapeTypeLoc;
-      var shapeSides = 8;
+      var u_canvasWidth_loc; // Location of "u_canvasWidth" uniform, which holds the width of the canvas.
+      var u_canvasHeight_loc; // Location of "u_canvasHeight" uniform, which holds the height of the canvas.
+      var u_pointSize_loc; // Location of "u_pointSize" uniform, which gives the size for point primitives.
+      var a_position_loc; // Location of the a_position attribute variable in the shader program;
+      //    This attribute gives the (x,y) coordinates of the points.
 
-      var POINT_COUNT = 300;
-      var POINT_SIZE = 50;
+      var a_color_loc; //+
+      var a_position_buffer; // Buffer to hold the values for a_position (coordinates for the points)
+      var a_color_buffer; //+
+      var u_shapeType_loc; //+
+      var nSides = 8; //+
 
-      var positions = new Float32Array(2 * POINT_COUNT);
-      var velocities = new Float32Array(2 * POINT_COUNT);
-      var colors = new Float32Array(3 * POINT_COUNT);
+      var POINT_COUNT = 300; // How many points to draw.
+      var POINT_SIZE = 32; // Size in pixel of the square drawn for each point.
 
-      var isRunning = false;
+      var point_positions = new Float32Array(2 * POINT_COUNT); // Position data for points.
+      var point_velocities = new Float32Array(2 * POINT_COUNT); //+
+      var point_colors = new Float32Array(3 * POINT_COUNT); //+
+      // Velocity data for points.
+      // Note: The xy coords for point number i are in point_positions[2*i],point_positions[2*i+1].
+      // The xy velocity compontents for point number i are in point_velocities[2*i],point_velociteis[2*i+1].
+      // Position coordinates are in pixels, and velocity components are in pixels per frame.
+
+      var isAnimationRunning = false; // The animation runs when this is true; its value is toggled by the space bar.
+      //_____________________________________________________________________________________________________
+
       var isColorRandom = false;
 
       function randomizeColors() {
-        for (let i = 0; i < colors.length; i++) {
-          colors[i] = Math.random();
+        for (let i = 0; i < point_colors.length; i++) {
+          point_colors[i] = Math.random();
         }
       }
 
       function changeShape() {
-        var num = prompt("How many vertices do you want:", "8");
-        shapeSides = parseInt(num);
-        gl.uniform1i(shapeTypeLoc, shapeSides);
+        var num = prompt("Ile wierzchołków chcesz mieć:", "8");
+        nSides = parseInt(num);
+        gl.uniform1i(u_shapeType_loc, nSides);
       }
 
-      function render() {
-        gl.clear(gl.COLOR_BUFFER_BIT);
+      //_____________________________________________________________________________________________________
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, vertexCoordsBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STREAM_DRAW);
-        gl.vertexAttribPointer(vertexCoordsLoc, 2, gl.FLOAT, false, 0, 0);
+      /**
+       *  Called by init() when the window is first opened, and by frame() to render each frame.
+       */
+      //_____________________________________________________________________________________________________
+
+      function render() {
+        gl.clear(gl.COLOR_BUFFER_BIT); // clear the color buffer before drawing
+
+        // The position data changes for each frame, so we have to send the new values
+        // for the position attirbute into the corresponding buffer in the GPU here,
+        // in every frame.
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, a_position_buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, point_positions, gl.STREAM_DRAW);
+        gl.vertexAttribPointer(a_position_loc, 2, gl.FLOAT, false, 0, 0);
 
         if (isColorRandom) {
-          gl.enableVertexAttribArray(vertexColorLoc);
+          gl.enableVertexAttribArray(a_color_loc);
         } else {
-          gl.disableVertexAttribArray(vertexColorLoc);
-          gl.vertexAttrib3f(vertexColorLoc, 0.7, 0.2, 0.5);
+          gl.disableVertexAttribArray(a_color_loc);
+          gl.vertexAttrib3f(a_color_loc, 0.7, 0.2, 0.5);
         }
 
         gl.drawArrays(gl.POINTS, 0, POINT_COUNT);
         if (gl.getError() != gl.NO_ERROR) {
           console.log("During render, a GL error has been detected.");
         }
-      }
+      } // end render()
+      //_____________________________________________________________________________________________________
 
-      function createData() {
+      /**
+       * Called once in init() to create the data for the scene. Creates point positions and
+       * velocities.  All points start at the center of the canvas, with random velocity.
+       * The speed is between 2 and 6 pixels per frame.
+       */
+      function createPointData() {
         randomizeColors();
         for (var i = 0; i < POINT_COUNT; i++) {
-          positions[2 * i] = canvas.width / 2;
-          positions[2 * i + 1] = canvas.height / 2;
+          point_positions[2 * i] = canvas.width / 2;
+          point_positions[2 * i + 1] = canvas.height / 2;
           var speed = 2 + 8 * Math.random();
           var angle = 2 * Math.PI * Math.random();
-          velocities[2 * i] = speed * Math.sin(angle);
-          velocities[2 * i + 1] = speed * Math.cos(angle);
+          point_velocities[2 * i] = speed * Math.sin(angle);
+          point_velocities[2 * i + 1] = speed * Math.cos(angle);
         }
-      }
+      } // end createPointData()
 
-      function updateData() {
+      /**
+       * Called by frame() before each frame is rendered.  Adds velcities
+       * to point positions.  If the point moves past the edge of the canvas,
+       * it bounces.
+       */
+      function updatePointData() {
         for (var i = 0; i < POINT_COUNT; i++) {
-          positions[2 * i] += velocities[2 * i];
-          if (positions[2 * i] < POINT_SIZE / 2 && velocities[2 * i] < 0) {
-            positions[2 * i] += 2 * (POINT_SIZE / 2 - positions[2 * i]);
-            velocities[2 * i] = Math.abs(velocities[2 * i]);
-          } else if (
-            positions[2 * i] > canvas.width - POINT_SIZE / 2 &&
-            velocities[2 * i] > 0
-          ) {
-            positions[2 * i] -=
-              2 * (positions[2 * i] - canvas.width + POINT_SIZE / 2);
-            velocities[2 * i] = -Math.abs(velocities[2 * i]);
-          }
-          positions[2 * i + 1] += velocities[2 * i + 1];
+          point_positions[2 * i] += point_velocities[2 * i];
           if (
-            positions[2 * i + 1] < POINT_SIZE / 2 &&
-            velocities[2 * i + 1] < 0
+            point_positions[2 * i] < POINT_SIZE / 2 &&
+            point_velocities[2 * i] < 0
           ) {
-            positions[2 * i + 1] += 2 * (POINT_SIZE / 2 - positions[2 * i + 1]);
-            velocities[2 * i + 1] = Math.abs(velocities[2 * i + 1]);
+            point_positions[2 * i] +=
+              2 * (POINT_SIZE / 2 - point_positions[2 * i]);
+            point_velocities[2 * i] = Math.abs(point_velocities[2 * i]);
           } else if (
-            positions[2 * i + 1] > canvas.height - POINT_SIZE / 2 &&
-            velocities[2 * i + 1] > 0
+            point_positions[2 * i] > canvas.width - POINT_SIZE / 2 &&
+            point_velocities[2 * i] > 0
           ) {
-            positions[2 * i + 1] -=
-              2 * (positions[2 * i + 1] - canvas.height + POINT_SIZE / 2);
-            velocities[2 * i + 1] = -Math.abs(velocities[2 * i + 1]);
+            point_positions[2 * i] -=
+              2 * (point_positions[2 * i] - canvas.width + POINT_SIZE / 2);
+            point_velocities[2 * i] = -Math.abs(point_velocities[2 * i]);
+          }
+          point_positions[2 * i + 1] += point_velocities[2 * i + 1];
+          if (
+            point_positions[2 * i + 1] < POINT_SIZE / 2 &&
+            point_velocities[2 * i + 1] < 0
+          ) {
+            point_positions[2 * i + 1] +=
+              2 * (POINT_SIZE / 2 - point_positions[2 * i + 1]);
+            point_velocities[2 * i + 1] = Math.abs(point_velocities[2 * i + 1]);
+          } else if (
+            point_positions[2 * i + 1] > canvas.height - POINT_SIZE / 2 &&
+            point_velocities[2 * i + 1] > 0
+          ) {
+            point_positions[2 * i + 1] -=
+              2 * (point_positions[2 * i + 1] - canvas.height + POINT_SIZE / 2);
+            point_velocities[2 * i + 1] = -Math.abs(
+              point_velocities[2 * i + 1]
+            );
           }
         }
-      }
+      } // end updatePointData()
 
-      function handleKey(evt) {
+      //_____________________________________________________________________________________________________
+
+      /* Called when the user hits a key */
+      function handleKeydown(evt) {
         var key = evt.keyCode;
         console.log("key pressed with keycode = " + key);
         if (key == 69) {
+          //e
           isColorRandom = !isColorRandom;
         }
         if (key == 87) {
-          shapeSides = 4;
+          //w
+          nSides = 4;
           changeShape();
         }
         if (key == 32) {
-          isRunning = !isRunning;
-          if (isRunning) {
+          isAnimationRunning = !isAnimationRunning;
+          if (isAnimationRunning) {
             requestAnimationFrame(frame);
           }
         }
-      }
+      } // end handleKeydown();
+      //_____________________________________________________________________________________________________
 
-      function initGL() {
+      /* Initialize the WebGL context.  Called from init() */
+      function initializeWebGL() {
         var program = createProgram(
           gl,
-          "vertex-shader",
-          "fragment-shader",
-          "vertexCoords"
+          "vertex-shader-source",
+          "fragment-shader-source",
+          "a_position"
         );
         gl.useProgram(program);
 
-        canvasWidthLoc = gl.getUniformLocation(program, "canvasWidth");
-        canvasHeightLoc = gl.getUniformLocation(program, "canvasHeight");
-        pointSizeLoc = gl.getUniformLocation(program, "pointSize");
-        vertexCoordsLoc = gl.getAttribLocation(program, "vertexCoords");
-        vertexColorLoc = gl.getAttribLocation(program, "vertexColor");
-        shapeTypeLoc = gl.getUniformLocation(program, "shapeType");
+        /* Get locations of uniforms and attributes. */
 
-        gl.uniform1f(canvasWidthLoc, canvas.width);
-        gl.uniform1f(canvasHeightLoc, canvas.height);
-        gl.uniform1f(pointSizeLoc, POINT_SIZE);
+        u_canvasWidth_loc = gl.getUniformLocation(program, "u_canvasWidth");
+        u_canvasHeight_loc = gl.getUniformLocation(program, "u_canvasHeight");
+        u_pointSize_loc = gl.getUniformLocation(program, "u_pointSize");
+        a_position_loc = gl.getAttribLocation(program, "a_position");
+        a_color_loc = gl.getAttribLocation(program, "a_color"); //+
 
-        vertexCoordsBuffer = gl.createBuffer();
-        gl.enableVertexAttribArray(vertexCoordsLoc);
+        u_shapeType_loc = gl.getUniformLocation(program, "u_shapeType"); //+
+        /* Assign initial values to uniforms. */
 
-        vertexColorBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, vertexColorBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
-        gl.vertexAttribPointer(vertexColorLoc, 3, gl.FLOAT, false, 0, 0);
+        gl.uniform1f(u_canvasWidth_loc, canvas.width);
+        gl.uniform1f(u_canvasHeight_loc, canvas.height);
+        gl.uniform1f(u_pointSize_loc, POINT_SIZE);
+        /* Create and configure buffers for the attributes. */
 
-        gl.clearColor(0, 0, 0, 1);
+        a_position_buffer = gl.createBuffer();
+        gl.enableVertexAttribArray(a_position_loc); // data from the attribute will come from a buffer.
+
+        a_color_buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, a_color_buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, point_colors, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(a_color_loc, 3, gl.FLOAT, false, 0, 0);
+
+        /* Configure other WebGL options. */
+
+        gl.clearColor(0, 0, 0, 1); // gl.clear will fill canvas with black.
 
         if (gl.getError() != gl.NO_ERROR) {
           console.log("During initialization, a GL error has been detected.");
         }
-      }
+      } // end initializeWebGL()
 
+      /**
+       * Creates a program for use in the WebGL context gl, and returns the
+       * identifier for that program.  If an error occurs while compiling or
+       * linking the program, an exception of type String is thrown.  The error
+       * string contains the compilation or linking error.  If no error occurs,
+       * the program identifier is the return value of the function.
+       *    The second and third parameters are the id attributes for <script>
+       * elements that contain the source code for the vertex and fragment
+       * shaders.
+       *     If the third parameter is present, it should be the name of an
+       * attribute variable in the shader program, and the attribute should be
+       * one that is always used.  The attribute will be assigned attribute
+       * number 0.  This is done because it is suggested that there should
+       * always be an attribute number 0 in use.
+       */
       function createProgram(gl, vertexShaderID, fragmentShaderID, attribute0) {
         function getTextContent(elementID) {
+          // This nested function retrieves the text content of an
+          // element on the web page.  It is used here to get the shader
+          // source code from the script elements that contain it.
           var element = document.getElementById(elementID);
           var node = element.firstChild;
           var str = "";
           while (node) {
-            if (node.nodeType == 3) str += node.textContent;
+            if (node.nodeType == 3)
+              // this is a text node
+              str += node.textContent;
             node = node.nextSibling;
           }
           return str;
@@ -252,51 +338,69 @@
         if (!gl.getShaderParameter(fsh, gl.COMPILE_STATUS)) {
           throw "Error in fragment shader:  " + gl.getShaderInfoLog(fsh);
         }
-        var program = gl.createProgram();
-        gl.attachShader(program, vsh);
-        gl.attachShader(program, fsh);
+        var prog = gl.createProgram();
+        gl.attachShader(prog, vsh);
+        gl.attachShader(prog, fsh);
         if (attribute0) {
-          gl.bindAttribLocation(program, 0, attribute0);
+          gl.bindAttribLocation(prog, 0, attribute0);
         }
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-          throw "Link error in program:  " + gl.getProgramInfoLog(program);
+        gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+          throw "Link error in program:  " + gl.getProgramInfoLog(prog);
         }
-        return program;
+        return prog;
       }
 
+      /**
+       *  A function to drive the animation, which runs continuously while the global
+       *  variable isAnimationRunning is true.  The value of this variable is toggled by pressing
+       *  the space bar.  If the animation is still running, this fucntion calls
+       *  updatePointData(), then calls render(), then calls requestAnimationFrame to
+       *  schedule the next call to the same function.
+       */
       function frame() {
-        if (isRunning) {
-          updateData();
+        if (isAnimationRunning) {
+          updatePointData();
           render();
-          requestAnimationFrame(frame);
+          requestAnimationFrame(frame); // Arrange for function to be called again
         }
       }
 
+      /**
+       * When the window is resized, we need to resize the canvas, reset the
+       * OpenGL viewport to match the size, and reset the values of the uniform
+       * variables in the shader that represent the canvas size.
+       */
       function handleResize() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         gl.viewport(0, 0, canvas.width, canvas.height);
-        gl.uniform1f(canvasWidthLoc, canvas.width);
-        gl.uniform1f(canvasHeightLoc, canvas.height);
-        if (!isRunning) {
+        gl.uniform1f(u_canvasWidth_loc, canvas.width);
+        gl.uniform1f(u_canvasHeight_loc, canvas.height);
+        if (!isAnimationRunning) {
           render();
         }
       }
 
+      /**
+       * Responds to left mouse click on canvas; points all head toward mouse location
+       * when mouse is clicked and as it is dragged.  However if shift key is down,
+       * all the data is reinitialized instead.
+       */
       function handleMouse(evt) {
         function headTowards(x, y) {
           for (var i = 0; i < POINT_COUNT; i++) {
-            var dx = x - positions[2 * i];
-            var dy = y - positions[2 * i + 1];
+            var dx = x - point_positions[2 * i];
+            var dy = y - point_positions[2 * i + 1];
             var dist = Math.sqrt(dx * dx + dy * dy);
             if (dist > 0.1) {
+              // only if mouse and point are not too close.
               var speed = Math.sqrt(
-                velocities[2 * i] * velocities[2 * i] +
-                  velocities[2 * i + 1] * velocities[2 * i + 1]
+                point_velocities[2 * i] * point_velocities[2 * i] +
+                  point_velocities[2 * i + 1] * point_velocities[2 * i + 1]
               );
-              velocities[2 * i] = (dx / dist) * speed;
-              velocities[2 * i + 1] = (dy / dist) * speed;
+              point_velocities[2 * i] = (dx / dist) * speed;
+              point_velocities[2 * i + 1] = (dy / dist) * speed;
             }
           }
         }
@@ -308,10 +412,10 @@
           document.removeEventListener("mouseup", up, false);
         }
         if (evt.which != 1) {
-          return;
+          return; // only respond to left mouse down
         }
         if (evt.shiftKey) {
-          createData();
+          createPointData();
           return;
         }
         headTowards(evt.clientX, evt.clientY);
@@ -319,15 +423,18 @@
         document.addEventListener("mouseup", up);
       }
 
+      /**
+       * initialization function that will be called when the page has loaded.
+       */
       function init() {
         try {
           canvas = document.createElement("canvas");
           canvas.width = window.innerWidth;
           canvas.height = window.innerHeight;
           var options = {
-            alpha: false,
-            depth: false,
-            stencil: false,
+            alpha: false, // The color buffer doesn't need an alpha component
+            depth: false, // No need for a depth buffer in this 2D program
+            stencil: false, // This program doesn't use a stencil buffer
           };
           gl = canvas.getContext("webgl", options);
           if (!gl) {
@@ -336,17 +443,17 @@
         } catch (e) {
           var message = document.createElement("p");
           message.innerHTML =
-            "Sorry, could not get a WebGL graphics context. Error: " + e;
+            "Sorry, could not get a WebGL graphics context.  Error: " + e;
           document.body.appendChild(message);
           return;
         }
         try {
-          createData();
-          initGL();
+          createPointData(); // create data for points (in case it's needed in initGL())
+          initializeWebGL(); // initialize the WebGL graphics context.
         } catch (e) {
           var message = document.createElement("p");
           message.innerHTML =
-            "<pre>Sorry, could not initialize graphics context. Error:\n\n" +
+            "<pre>Sorry, could not initialize graphics context.  Error:\n\n" +
             e +
             "</pre>";
           document.body.appendChild(message);
@@ -355,7 +462,7 @@
         document.body.appendChild(canvas);
         window.addEventListener("resize", handleResize);
         canvas.addEventListener("mousedown", handleMouse);
-        document.addEventListener("keydown", handleKey);
+        document.addEventListener("keydown", handleKeydown);
         requestAnimationFrame(frame);
       }
     </script>
